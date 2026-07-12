@@ -1,16 +1,17 @@
 import os
-import base64
 from openai import OpenAI
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-# ---- Setup ----
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+# ---- Setup: point the OpenAI SDK at AI Pipe instead of OpenAI directly ----
+client = OpenAI(
+    api_key=os.environ.get("AIPIPE_TOKEN"),
+    base_url="https://aipipe.org/openai/v1",
+)
 
 app = FastAPI()
 
-# ---- Enable CORS ----
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -31,7 +32,7 @@ def answer_image(payload: ImageQuestion):
     )
 
     response = client.chat.completions.create(
-        model="gpt-4o",  # or "gpt-5" if you have access
+        model="gpt-4o-mini",  # any vision-capable model AI Pipe supports
         messages=[
             {
                 "role": "user",
@@ -50,5 +51,4 @@ def answer_image(payload: ImageQuestion):
     )
 
     answer_text = response.choices[0].message.content.strip()
-
     return {"answer": str(answer_text)}
