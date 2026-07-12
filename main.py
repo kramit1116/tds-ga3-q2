@@ -1,48 +1,54 @@
 import os
 import base64
-import google.generativeai as genai
+from openai import OpenAI
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # ---- Setup ----
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-model = genai.GenerativeModel("gemini-3.0-flash")
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 app = FastAPI()
 
-# ---- Enable CORS (Rule #2) ----
+# ---- Enable CORS ----
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],      # allow requests from anywhere (the grader's Cloudflare Worker)
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ---- Define the shape of the incoming request ----
 class ImageQuestion(BaseModel):
     image_base64: str
     question: str
 
-# ---- The actual endpoint ----
 @app.post("/answer-image")
 def answer_image(payload: ImageQuestion):
-    image_bytes = base64.b64decode(payload.image_base64)
-
     prompt = (
         f"{payload.question}\n\n"
         "Answer with ONLY the raw value — no units, no currency symbols, "
         "no extra words. If it's a number, just give the number."
     )
 
-    response = model.generate_content(
-        [
-            {"mime_type": "image/png", "data": image_bytes},
-            prompt,
-        ]
+    response = client.chat.completions.create(
+        model="gpt-4o",  # or "gpt-5" if you have access
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/png;base64,{payload.image_base64}"
+                        },
+                    },
+                ],
+            }
+        ],
+        max_tokens=100,
     )
 
-    answer_text = response.text.strip()
+    answer_text = response.choices[0].message.content.strip()
 
-    # Rule #1: answer must ALWAYS be a string
     return {"answer": str(answer_text)}
